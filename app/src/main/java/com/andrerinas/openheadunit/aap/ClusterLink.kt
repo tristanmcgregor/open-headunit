@@ -31,6 +31,7 @@ object ClusterLink {
     @Volatile private var latest: String = JSONObject().put("type", "nav").put("active", false).toString()
     @Volatile private var latestMedia: String? = null
     @Volatile private var latestCall: String? = null
+    @Volatile private var latestSettings: String? = null
 
     @Synchronized
     fun start() {
@@ -106,6 +107,13 @@ object ClusterLink {
         broadcast(json)
     }
 
+    /** Cluster display settings (CarSettings), also replayed to every cluster that connects. */
+    fun publishSettings(json: String) {
+        start()
+        latestSettings = json
+        broadcast(json)
+    }
+
     private fun broadcast(json: String) {
         val frame = textFrame(json)
         for (c in clients) {
@@ -128,7 +136,10 @@ object ClusterLink {
             val out = socket.getOutputStream()
             if (key == null) {
                 // JLY E60 build: over-the-air update endpoints (/update/..., /dash/...)
-                if (CarUpdate.handle(headers[":method"] ?: "GET", headers[":path"] ?: "/", headers, input, out)) {
+                val method = headers[":method"] ?: "GET"
+                val path = headers[":path"] ?: "/"
+                if (CarUpdate.handle(method, path, headers, input, out) ||
+                    CarSettings.handle(method, path, headers, input, out)) {
                     socket.close()
                     return
                 }
@@ -157,6 +168,7 @@ object ClusterLink {
             out.write(textFrame(latest))
             latestMedia?.let { out.write(textFrame(it)) }
             latestCall?.let { out.write(textFrame(it)) }
+            latestSettings?.let { out.write(textFrame(it)) }
             out.flush()
             clients.add(socket)
             AppLog.i("ClusterLink: cluster connected from ${socket.inetAddress.hostAddress}")
