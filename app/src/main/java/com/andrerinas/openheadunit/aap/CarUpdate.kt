@@ -85,6 +85,7 @@ object CarUpdate {
                 method == "GET" && route == "/update/status" -> respond(out, 200, "application/json", status())
                 method == "POST" && route == "/update/dash" -> upload(Kind.DASH, query, headers, input, out)
                 method == "POST" && route == "/update/apk" -> upload(Kind.APK, query, headers, input, out)
+                method == "POST" && route == "/update/speedlimits" -> upload(Kind.SPEEDLIMITS, query, headers, input, out)
                 method == "GET" && route == "/dash/manifest.txt" -> {
                     query["have"]?.toIntOrNull()?.let { noteClusterRelease(it) }
                     val meta = dashMeta()
@@ -106,7 +107,7 @@ object CarUpdate {
         return true
     }
 
-    private enum class Kind { DASH, APK }
+    private enum class Kind { DASH, APK, SPEEDLIMITS }
 
     private class Meta(val release: Int, val sha256: String, val size: Long)
 
@@ -116,6 +117,7 @@ object CarUpdate {
         .put("apkVersionCode", BuildConfig.VERSION_CODE)
         .put("pendingApkRelease", pendingApkRelease())
         .put("dashRelease", dashMeta()?.release ?: 0)
+        .put("speedLimitsRelease", readInt("speedlimits.txt"))
         .put("clusterDashRelease", readInt("cluster.txt"))
         .toString()
 
@@ -139,6 +141,7 @@ object CarUpdate {
         val current = when (kind) {
             Kind.DASH -> dashMeta()?.release ?: 0
             Kind.APK -> maxOf(BuildConfig.E60_RELEASE, pendingApkRelease())
+            Kind.SPEEDLIMITS -> readInt("speedlimits.txt")
         }
         if (release <= current) return refuse(409, "already have $current")
 
@@ -173,6 +176,20 @@ object CarUpdate {
                 promptedRelease = 0
                 home?.get()?.let { a -> main.post { offerInstall(a) } }
             }
+            Kind.SPEEDLIMITS -> {
+                // shipped gzip-compressed; unpacked once here so the matcher can map it
+                val bin = File(dir, "speedlimits.bin.tmp")
+                try {
+                    java.util.zip.GZIPInputStream(tmp.inputStream()).use { gz -> bin.outputStream().use { gz.copyTo(it) } }
+                } catch (e: Exception) {
+                    tmp.delete(); bin.delete()
+                    return respond(out, 400, "text/plain", "not a gzip speed-limit file")
+                }
+                tmp.delete()
+                bin.renameTo(speedLimitFile())
+                File(dir, "speedlimits.txt").writeText("$release\n")
+                SpeedLimits.reload()
+            }
         }
         AppLog.i("CarUpdate: ${kind} release $release received ($length bytes)")
         respond(out, 200, "text/plain", "ok")
@@ -189,6 +206,9 @@ object CarUpdate {
     } catch (e: Exception) {
         false
     }
+
+    /** The installed speed-limit data (see updater/speedlimits.py for the format). */
+    fun speedLimitFile(): File = File(dir, "speedlimits.bin")
 
     private fun dashMeta(): Meta? {
         val lines = File(dir, "dash.txt").takeIf { it.isFile && File(dir, "dash.tar.gz").isFile }
