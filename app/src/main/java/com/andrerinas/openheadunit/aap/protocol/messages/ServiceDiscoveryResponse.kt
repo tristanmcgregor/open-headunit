@@ -137,6 +137,53 @@ class ServiceDiscoveryResponse(private val context: Context)
 
             services.add(video)
 
+            // Phone status (JLY E60 build): lets the phone report calls, which go to the cluster.
+            services.add(Control.Service.newBuilder().also { service ->
+                service.id = Channel.ID_PHONE
+                service.phoneStatusService = Control.Service.PhoneStatusService.newBuilder().build()
+            }.build())
+
+            // Instrument cluster display: a second H.264 sink the phone fills with a
+            // navigation-only picture. display_id (6) and display_type (7) are newer than this
+            // project's generated protos, so they ride as raw fields; on the wire it is the same.
+            if (com.andrerinas.openheadunit.aap.ClusterVideo.ENABLED) {
+                val cv = com.andrerinas.openheadunit.aap.ClusterVideo
+                val clusterSink = Control.Service.MediaSinkService.newBuilder().apply {
+                    availableType = Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP
+                    audioType = Media.AudioStreamType.NONE
+                    availableWhileInCall = true
+                    addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
+                        codecResolution = Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480
+                        frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30
+                        setMarginWidth(cv.MARGIN_WIDTH)
+                        setMarginHeight(cv.MARGIN_HEIGHT)
+                        setDensity(cv.DENSITY)
+                        setVideoCodecType(Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP)
+                    }.build())
+                    unknownFields = com.google.protobuf.UnknownFieldSet.newBuilder()
+                        .addField(6, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(cv.DISPLAY_ID.toLong()).build())
+                        .addField(7, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(cv.DISPLAY_TYPE_CLUSTER.toLong()).build())
+                        .build()
+                }.build()
+                services.add(Control.Service.newBuilder().also { service ->
+                    service.id = Channel.ID_CLU
+                    service.mediaSinkService = clusterSink
+                }.build())
+                // Every display needs exactly one input service carrying its display_id, or the
+                // phone's display-topology check fails and the session ends. The cluster takes no
+                // input, so this one announces no keys and no touch surface.
+                services.add(Control.Service.newBuilder().also { service ->
+                    service.id = Channel.ID_CLU_INP
+                    // display_id is field 5, newer than the generated protos, so it rides raw
+                    service.inputSourceService = Control.Service.InputSourceService.newBuilder()
+                        .setUnknownFields(com.google.protobuf.UnknownFieldSet.newBuilder()
+                            .addField(5, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(cv.DISPLAY_ID.toLong()).build())
+                            .build())
+                        .build()
+                }.build())
+                AppLog.i("[ServiceDiscovery] Cluster display announced on channel ${Channel.ID_CLU} (input ${Channel.ID_CLU_INP}, display id ${cv.DISPLAY_ID}): ${cv.WIDTH}x${cv.HEIGHT}, margins ${cv.MARGIN_WIDTH}x${cv.MARGIN_HEIGHT}")
+            }
+
             val input = Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_INP
                 service.inputSourceService = Control.Service.InputSourceService.newBuilder().also {

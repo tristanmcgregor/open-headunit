@@ -63,6 +63,10 @@ class AapNavigationHelper(
         val estimatedArrival: String?
     )
 
+    init {
+        ClusterLink.start()
+    }
+
     fun nowElapsedRealtimeMs(): Long = SystemClock.elapsedRealtime()
 
     @Suppress("DEPRECATION") // Single bridge: legacy nextEventType/turnSide → NavigationUpdateIntent
@@ -82,6 +86,23 @@ class AapNavigationHelper(
             estimatedArrival = prepared.estimatedArrival
         )
         context.applicationContext.sendBroadcast(intent, NavigationUpdateIntent.BROADCAST_PERMISSION)
+
+        // navEventType 2 = instrument cluster stop (AapNavigation.NAV_EVENT_TYPE_STOP)
+        val hasRoute = prepared.nextManeuver != null || prepared.distanceMeters != null || prepared.road.isNotBlank()
+        ClusterLink.publish(
+            active = navEventType != 2 && hasRoute,
+            maneuver = prepared.nextManeuver,
+            actionText = prepared.actionText,
+            road = prepared.road,
+            distanceMeters = prepared.distanceMeters,
+            timeSeconds = prepared.timeSeconds,
+            roundaboutExit = prepared.turnNumber,
+            turnAngle = prepared.turnAngle,
+            turnSide = prepared.turnSide,
+            totalDistanceMeters = prepared.totalDistanceMeters,
+            totalTimeSeconds = prepared.totalTimeSeconds,
+            estimatedArrival = prepared.estimatedArrival
+        )
     }
 
     fun showNotificationForSnapshot(snapshot: NavigationSnapshot, distanceMeters: Int?) {

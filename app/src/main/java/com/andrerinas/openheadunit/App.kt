@@ -46,6 +46,8 @@ class App : Application(), Application.ActivityLifecycleCallbacks {
         super.onCreate()
         instance = this
         registerActivityLifecycleCallbacks(this)
+        // JLY E60 build: over-the-air updates from the phone updater (see updater/PROTOCOL.md)
+        com.andrerinas.openheadunit.aap.CarUpdate.init(this)
 
         try {
             val packageReceiver = object : BroadcastReceiver() {

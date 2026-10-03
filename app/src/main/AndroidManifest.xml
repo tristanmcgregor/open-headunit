@@ -86,6 +86,8 @@
          RECORD_AUDIO is actually granted, because claiming it without throws on Android 14+. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- JLY E60 build: installs its own updates delivered by the phone updater -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!--
         Only requested up to API 32. From API 33 (Android 13) a granted READ_LOGS makes the app a
         privileged logd reader, which routes every `logcat` spawn through LogcatManagerService: the
@@ -454,5 +456,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
+
+        <!-- JLY E60 build: result of installing an over-the-air APK update (CarUpdate) -->
+        <receiver
+            android:name=".aap.CarUpdate$InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.andrerinas.openheadunit.E60_INSTALL_RESULT" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

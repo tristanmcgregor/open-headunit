@@ -373,6 +373,17 @@ class SoftApCredentialsProvider(
             return null
         }
 
+        // JLY E60 build: this ZLH head unit's hotspot (AndroidAP_8177) sits on 192.168.43.x
+        // (the JLY cluster sees the head unit at 192.168.43.92), while the unit has other
+        // internal networks the heuristic below can pick instead. Prefer the hotspot subnet.
+        AppLog.i("SoftApCredentials: interfaces: " + candidates.joinToString {
+            "${it.name}=${it.siteLocalIpv4 ?: "-"}${if (it.isUp) "" else "(down)"}"
+        })
+        candidates.firstOrNull { it.isUp && it.siteLocalIpv4?.startsWith(HOTSPOT_SUBNET_PREFIX) == true }?.let {
+            AppLog.i("SoftApCredentials: Using '${it.name}' (${it.siteLocalIpv4}) on the hotspot subnet $HOTSPOT_SUBNET_PREFIX")
+            return ChosenInterface(it, namedByUser = true)
+        }
+
         val named = settings.hotspotInterface.trim()
         if (named.isNotEmpty()) {
             val match = candidates.firstOrNull { it.name.equals(named, ignoreCase = true) }
@@ -541,3 +552,6 @@ class SoftApCredentialsProvider(
         null
     }
 }
+
+/** JLY E60 build: the head unit's hotspot subnet. See pickApInterface. */
+private const val HOTSPOT_SUBNET_PREFIX = "192.168.43."
