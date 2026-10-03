@@ -22,13 +22,19 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.lang.ref.WeakReference
+import android.util.Base64
+import java.security.KeyFactory
 import java.security.MessageDigest
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
 
 /**
  * JLY E60 build: over-the-air updates, as described in updater/PROTOCOL.md.
  *
  * The phone updater app pushes GitHub releases here over the car Wi-Fi (POST /update/...); the
  * cluster pulls dash bundles from here (GET /dash/...). Both arrive on ClusterLink's port.
+ * An upload is accepted only with a valid release signature (E60_UPDATE_PUBKEY), so nothing
+ * secret is built into the app and nobody on the car Wi-Fi can push their own update.
  *
  * An uploaded APK is only staged. The install confirmation is shown when the app's own home
  * screen is in front, never over a projection, because the system dialog would cover Android Auto.
@@ -121,16 +127,15 @@ object CarUpdate {
             if (length in 1..MAX_UPLOAD) discard(input, length)
             respond(out, code, "text/plain", why)
         }
-        val key = headers["x-update-key"] ?: ""
-        if (BuildConfig.E60_UPDATE_KEY.isEmpty() ||
-            !MessageDigest.isEqual(key.toByteArray(), BuildConfig.E60_UPDATE_KEY.toByteArray())) {
-            AppLog.w("CarUpdate: upload refused, bad key")
-            return refuse(401, "bad key")
-        }
         val release = query["release"]?.toIntOrNull() ?: 0
         val sha = query["sha256"]?.lowercase() ?: ""
         if (release <= 0 || sha.length != 64 || length <= 0 || length > MAX_UPLOAD)
             return refuse(400, "need release, sha256 and Content-Length")
+        // The release tool signs "<kind>\n<release>\n<sha256>\n"; the body is then held to that sha256.
+        if (!signatureValid(kind, release, sha, headers["x-update-signature"] ?: "")) {
+            AppLog.w("CarUpdate: ${kind} release $release refused, signature does not verify")
+            return refuse(401, "bad signature")
+        }
         val current = when (kind) {
             Kind.DASH -> dashMeta()?.release ?: 0
             Kind.APK -> maxOf(BuildConfig.E60_RELEASE, pendingApkRelease())
@@ -171,6 +176,18 @@ object CarUpdate {
         }
         AppLog.i("CarUpdate: ${kind} release $release received ($length bytes)")
         respond(out, 200, "text/plain", "ok")
+    }
+
+    private fun signatureValid(kind: Kind, release: Int, sha: String, signature: String): Boolean = try {
+        val key = KeyFactory.getInstance("EC").generatePublic(
+            X509EncodedKeySpec(Base64.decode(BuildConfig.E60_UPDATE_PUBKEY, Base64.DEFAULT)))
+        Signature.getInstance("SHA256withECDSA").run {
+            initVerify(key)
+            update("${kind.name.lowercase()}\n$release\n$sha\n".toByteArray())
+            verify(Base64.decode(signature, Base64.DEFAULT))
+        }
+    } catch (e: Exception) {
+        false
     }
 
     private fun dashMeta(): Meta? {

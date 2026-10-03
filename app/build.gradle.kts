@@ -99,14 +99,13 @@ android {
         minSdk = 16
         targetSdk = 36
         // JLY E60 build: -Pe60Release=N (tools/release.py) numbers an over-the-air release; its
-        // versionCode must keep rising for Android to accept the update. The shared update key
-        // comes from updater/updater.properties, kept out of git.
+        // versionCode must keep rising for Android to accept the update. Uploads must be signed
+        // by the release key; only its public half (updater/signing_pub.pem) is built in.
         val e60Release = (project.findProperty("e60Release") as String?)?.toIntOrNull() ?: 0
-        val e60Props = Properties().apply {
-            rootProject.file("../../updater/updater.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
-        }
+        val e60PubKey = rootProject.file("../../updater/signing_pub.pem").takeIf { it.isFile }?.readLines()
+            ?.filter { !it.startsWith("-----") }?.joinToString("") ?: ""
         buildConfigField("int", "E60_RELEASE", "$e60Release")
-        buildConfigField("String", "E60_UPDATE_KEY", "\"${e60Props.getProperty("update.key", "")}\"")
+        buildConfigField("String", "E60_UPDATE_PUBKEY", "\"$e60PubKey\"")
         versionCode = if (e60Release > 0) 200000 + e60Release else 115
         versionName = if (e60Release > 0) "3.5.0-beta2-e60.$e60Release" else "3.5.0-beta2"
         setProperty("archivesBaseName", "${applicationId}_${versionName}")
