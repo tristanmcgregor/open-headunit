@@ -133,6 +133,7 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 #status{text-align:center;margin:10px 0;color:var(--dim);min-height:1.4em}
 </style></head><body><main>
 <h1>E60 cluster settings</h1>
+<div id="versions" style="color:var(--dim);font-size:14px;margin:-8px 0 14px"></div>
 <section><h2>Speed</h2>
 <label><span>Speed correction %<small>Added to the car's speed (true-speed calibration)</small></span><input id="speedCorrection" type="number" step="0.5"></label>
 <label><span>Show speed limit</span><input id="speedLimit" type="checkbox"></label>
@@ -164,6 +165,8 @@ function collect(){const o={};['speedCorrection','speedLimitMargin','shiftWindow
  const red=[];for(let i=0;i<8;i++){const a=document.querySelector(`[data-r="${'$'}{i}"][data-c="0"]`).value,b=document.querySelector(`[data-r="${'$'}{i}"][data-c="1"]`).value;if(a!==''&&b!=='')red.push([Number(a),Number(b)])}
  o.redline=red;return o}
 function status(t,c){$('status').textContent=t;$('status').style.color=c||''}
+fetch('/update/status').then(r=>r.json()).then(v=>{const n=x=>x>0?x:'—';
+ $('versions').textContent=`Head unit app ${'$'}{n(v.apkRelease)} · dash ${'$'}{n(v.dashRelease)} · cluster ${'$'}{n(v.clusterDashRelease)} · speed limits ${'$'}{n(v.speedLimitsRelease)}`}).catch(()=>{});
 fetch('/settings.json').then(r=>r.json()).then(j=>{s=j;show()}).catch(()=>status('Could not reach the head unit','var(--bad)'));
 $('save').onclick=()=>{status('Saving…');fetch('/settings.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collect())})
  .then(r=>r.ok?r.json():Promise.reject(r.status)).then(j=>{s=j;show();status('Saved — the cluster updates now','var(--ok)')})

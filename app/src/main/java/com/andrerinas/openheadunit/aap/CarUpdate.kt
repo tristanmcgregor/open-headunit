@@ -56,6 +56,7 @@ object CarUpdate {
             override fun onActivityResumed(activity: Activity) {
                 if (activity is MainActivity) {
                     home = WeakReference(activity)
+                    announceUpdate(activity)
                     offerInstall(activity)
                 }
             }
@@ -234,6 +235,14 @@ object CarUpdate {
 
     private fun readInt(name: String): Int =
         try { File(dir, name).readText().trim().lines().first().toInt() } catch (_: Exception) { 0 }
+
+    /** Once per new release: confirms on screen that the update really installed. */
+    private fun announceUpdate(activity: Activity) {
+        val release = BuildConfig.E60_RELEASE
+        if (release <= 0 || readInt("announced.txt") == release) return
+        File(dir, "announced.txt").writeText("$release\n")
+        Toast.makeText(activity, "Open Headunit: E60 release $release installed", Toast.LENGTH_LONG).show()
+    }
 
     // ---- APK install ----
 

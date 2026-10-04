@@ -1002,7 +1002,9 @@ class SettingsFragment : Fragment() {
         items.add(SettingItem.SettingEntry(
             stableId = "clusterSettings",
             nameResId = R.string.cluster_settings,
-            value = getString(R.string.cluster_settings_desc),
+            value = (if (com.andrerinas.openheadunit.BuildConfig.E60_RELEASE > 0)
+                "Head unit app release ${com.andrerinas.openheadunit.BuildConfig.E60_RELEASE}. " else "Head unit app dev build. ") +
+                getString(R.string.cluster_settings_desc),
             onClick = { _ ->
                 startActivity(Intent(requireContext(), ClusterSettingsActivity::class.java))
             }
