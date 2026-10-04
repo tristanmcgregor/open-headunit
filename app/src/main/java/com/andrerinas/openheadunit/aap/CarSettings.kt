@@ -72,7 +72,8 @@ object CarSettings {
         .put("shiftLights", true)
         .put("shiftWindow", 2000)
         .put("shiftMargin", 200)
-        .put("redline", JSONArray("[[30,4500],[50,5000],[70,5500],[80,6000],[90,6500],[100,7000]]"))
+        .put("redline", JSONArray("[[20,4500],[40,5166],[50,5500],[60,6000],[70,6500],[80,6875],[90,7250]]"))
+        .put("perfPopups", "sport")
         .put("speedLimit", true)
         .put("speedLimitMargin", 3)
         .put("defaultPage", 0)
@@ -91,6 +92,7 @@ object CarSettings {
             .put("speedLimit", input.optBoolean("speedLimit", true))
             .put("speedLimitMargin", num("speedLimitMargin", 0.0, 20.0).toInt())
             .put("defaultPage", num("defaultPage", 0.0, 3.0).toInt())
+            .put("perfPopups", input.optString("perfPopups", "sport").takeIf { it in setOf("sport", "always", "off") } ?: "sport")
         // redline rows [°C, rpm], sorted by temperature
         val rows = (input.optJSONArray("redline") ?: d.getJSONArray("redline"))
         val table = (0 until rows.length()).mapNotNull { i ->
@@ -139,11 +141,12 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 <section><h2>Sport layout &amp; shift lights</h2>
 <label><span>Sport layout</span><select id="sport"><option value="auto">In S and M</option><option value="always">Always</option><option value="never">Never</option></select></label>
 <label><span>Shift lights</span><input id="shiftLights" type="checkbox"></label>
+<label><span>0–60 / 0–100 popups<small>Runs are always timed; this is when the result shows</small></span><select id="perfPopups"><option value="sport">In S and M</option><option value="always">Always</option><option value="off">Off</option></select></label>
 <label><span>Light-up window (rpm)<small>Lights start this far below the shift point</small></span><input id="shiftWindow" type="number" step="100"></label>
 <label><span>Shift margin (rpm)<small>Flash this far below the redline</small></span><input id="shiftMargin" type="number" step="50"></label>
 </section>
 <section><h2>Redline by oil temperature</h2>
-<small>From each oil temperature upwards the redline is the rpm on that row.</small>
+<small>The redline follows a straight line between rows, and stays flat below the first and above the last.</small>
 <table id="redline"></table>
 </section>
 <section><h2>Display</h2>
@@ -153,12 +156,12 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 </main><script>
 const $=id=>document.getElementById(id);let s={};
 function rows(){const t=$('redline');t.innerHTML='<tr><td><small>Oil °C</small></td><td><small>Redline rpm</small></td></tr>';
- for(let i=0;i<6;i++){const r=s.redline[i]||['',''];t.insertAdjacentHTML('beforeend',`<tr><td><input type="number" data-r="${'$'}{i}" data-c="0" value="${'$'}{r[0]}"></td><td><input type="number" step="100" data-r="${'$'}{i}" data-c="1" value="${'$'}{r[1]}"></td></tr>`)}}
+ for(let i=0;i<8;i++){const r=s.redline[i]||['',''];t.insertAdjacentHTML('beforeend',`<tr><td><input type="number" data-r="${'$'}{i}" data-c="0" value="${'$'}{r[0]}"></td><td><input type="number" step="100" data-r="${'$'}{i}" data-c="1" value="${'$'}{r[1]}"></td></tr>`)}}
 function show(){['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin'].forEach(k=>$(k).value=s[k]);
- ['speedLimit','shiftLights'].forEach(k=>$(k).checked=s[k]);$('sport').value=s.sport;$('defaultPage').value=s.defaultPage;rows()}
+ ['speedLimit','shiftLights'].forEach(k=>$(k).checked=s[k]);$('sport').value=s.sport;$('perfPopups').value=s.perfPopups;$('defaultPage').value=s.defaultPage;rows()}
 function collect(){const o={};['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin','defaultPage'].forEach(k=>o[k]=Number($(k).value));
- ['speedLimit','shiftLights'].forEach(k=>o[k]=$(k).checked);o.sport=$('sport').value;
- const red=[];for(let i=0;i<6;i++){const a=document.querySelector(`[data-r="${'$'}{i}"][data-c="0"]`).value,b=document.querySelector(`[data-r="${'$'}{i}"][data-c="1"]`).value;if(a!==''&&b!=='')red.push([Number(a),Number(b)])}
+ ['speedLimit','shiftLights'].forEach(k=>o[k]=$(k).checked);o.sport=$('sport').value;o.perfPopups=$('perfPopups').value;
+ const red=[];for(let i=0;i<8;i++){const a=document.querySelector(`[data-r="${'$'}{i}"][data-c="0"]`).value,b=document.querySelector(`[data-r="${'$'}{i}"][data-c="1"]`).value;if(a!==''&&b!=='')red.push([Number(a),Number(b)])}
  o.redline=red;return o}
 function status(t,c){$('status').textContent=t;$('status').style.color=c||''}
 fetch('/settings.json').then(r=>r.json()).then(j=>{s=j;show()}).catch(()=>status('Could not reach the head unit','var(--bad)'));
