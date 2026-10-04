@@ -21,16 +21,21 @@ internal class AapMessageHandlerType(
     // JLY E60 build: now-playing also goes to the cluster (ClusterLink "media").
     private var clusterTrack = MediaPlayback.MediaMetaData.getDefaultInstance()
     private var clusterPlaying = false
+    private var clusterPosition = 0
     private val mediaPlayback = AapMediaPlayback(
         { meta ->
             onAaMediaMetadata?.invoke(meta)
+            val newArt = !meta.albumArt.equals(clusterTrack.albumArt)
             clusterTrack = meta
-            ClusterLink.publishMedia(meta.song, meta.artist, meta.album, clusterPlaying)
+            ClusterLink.publishMedia(meta.song, meta.artist, meta.album, clusterPlaying, meta.durationSeconds, clusterPosition)
+            if (newArt) ClusterLink.publishArt(if (meta.hasAlbumArt()) meta.albumArt.toByteArray() else null)
         },
         { status ->
             onAaPlaybackStatus?.invoke(status)
             clusterPlaying = status.state == MediaPlayback.MediaPlaybackStatus.State.PLAYING
-            ClusterLink.publishMedia(clusterTrack.song, clusterTrack.artist, clusterTrack.album, clusterPlaying)
+            clusterPosition = status.playbackSeconds
+            ClusterLink.publishMedia(clusterTrack.song, clusterTrack.artist, clusterTrack.album, clusterPlaying,
+                clusterTrack.durationSeconds, clusterPosition)
         }
     )
     private val aapNavigation = AapNavigation(context, settings)

@@ -34,6 +34,7 @@ object ClusterLink {
     @Volatile private var latestSettings: String? = null
     @Volatile private var latestLimit: String? = null
     @Volatile private var latestClusterMap: String? = null
+    @Volatile private var latestArt: String? = null
 
     @Synchronized
     fun start() {
@@ -92,11 +93,36 @@ object ClusterLink {
     }
 
     /** Now playing from Android Auto's media-playback channel. */
-    fun publishMedia(title: String, artist: String, album: String, playing: Boolean) {
+    fun publishMedia(title: String, artist: String, album: String, playing: Boolean,
+                     durationSeconds: Int = 0, positionSeconds: Int = 0) {
         start()
         val json = JSONObject().put("type", "media").put("title", title).put("artist", artist)
-            .put("album", album).put("playing", playing).toString()
+            .put("album", album).put("playing", playing)
+            .put("duration", durationSeconds).put("position", positionSeconds).toString()
         latestMedia = json
+        broadcast(json)
+    }
+
+    /**
+     * Album art for the cluster's now-playing card, sent once per track rather than with every
+     * position update. Shrunk to a small JPEG here: the card shows it at 48 px.
+     */
+    fun publishArt(art: ByteArray?) {
+        start()
+        val url = try {
+            art?.takeIf { it.isNotEmpty() }?.let { bytes ->
+                val src = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@let null
+                val small = android.graphics.Bitmap.createScaledBitmap(src, 128, 128, true)
+                val out = java.io.ByteArrayOutputStream()
+                small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+                "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+            } ?: ""
+        } catch (e: Exception) {
+            AppLog.w("ClusterLink: album art not usable (${e.message})")
+            ""
+        }
+        val json = JSONObject().put("type", "mediaart").put("art", url).toString()
+        latestArt = json
         broadcast(json)
     }
 
@@ -184,6 +210,7 @@ object ClusterLink {
             )
             out.write(textFrame(latest))
             latestMedia?.let { out.write(textFrame(it)) }
+            latestArt?.let { out.write(textFrame(it)) }
             latestCall?.let { out.write(textFrame(it)) }
             latestSettings?.let { out.write(textFrame(it)) }
             latestLimit?.let { out.write(textFrame(it)) }
