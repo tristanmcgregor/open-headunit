@@ -157,6 +157,12 @@ object ClusterLink {
         broadcast(json)
     }
 
+    /** Short-lived readings (GPS speed, camera countdown): sent to connected clusters, not replayed. */
+    fun publishLive(json: String) {
+        start()
+        broadcast(json)
+    }
+
     private fun broadcast(json: String) {
         val frame = textFrame(json)
         for (c in clients) {
