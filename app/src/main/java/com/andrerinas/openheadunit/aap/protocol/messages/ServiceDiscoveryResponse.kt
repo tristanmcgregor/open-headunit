@@ -153,7 +153,8 @@ class ServiceDiscoveryResponse(private val context: Context)
                     audioType = Media.AudioStreamType.NONE
                     availableWhileInCall = true
                     addVideoConfigs(Control.Service.MediaSinkService.VideoConfiguration.newBuilder().apply {
-                        codecResolution = Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480
+                        codecResolution = if (cv.wide) Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._1280x720
+                            else Control.Service.MediaSinkService.VideoConfiguration.VideoCodecResolutionType._800x480
                         frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30
                         setMarginWidth(cv.MARGIN_WIDTH)
                         setMarginHeight(cv.MARGIN_HEIGHT)
@@ -181,6 +182,8 @@ class ServiceDiscoveryResponse(private val context: Context)
                             .build())
                         .build()
                 }.build())
+                // the cluster crops to the drawn area: the phone draws top-left, margin at the bottom
+                com.andrerinas.openheadunit.aap.ClusterLink.publishClusterMap(cv.WIDTH - cv.MARGIN_WIDTH, cv.HEIGHT - cv.MARGIN_HEIGHT)
                 AppLog.i("[ServiceDiscovery] Cluster display announced on channel ${Channel.ID_CLU} (input ${Channel.ID_CLU_INP}, display id ${cv.DISPLAY_ID}): ${cv.WIDTH}x${cv.HEIGHT}, margins ${cv.MARGIN_WIDTH}x${cv.MARGIN_HEIGHT}")
             }
 

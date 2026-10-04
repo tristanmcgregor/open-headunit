@@ -27,12 +27,16 @@ object ClusterVideo {
     const val ENABLED = true
     const val PORT = 8766
 
-    // Announced to the phone in ServiceDiscoveryResponse. The full 800x480 frame fills the
-    // band between the cluster's hairlines; its edges sit behind the two dials.
-    const val WIDTH = 800
-    const val HEIGHT = 480
+    // Announced to the phone in ServiceDiscoveryResponse, fixed for the session.
+    // Wide (default, CarSettings "mapWide"): 1280x720 with 240 px of bottom margin, so the
+    // phone draws a 1280x480 map at the top - exactly the cluster's 1920x720 shape, for the
+    // full-screen map. Standard: the original 800x480 for the band between the dials only.
+    // The cluster is told the map's real size (ClusterLink "clustermap") and crops to it.
+    val wide: Boolean get() = CarSettings.mapWide
+    val WIDTH: Int get() = if (wide) 1280 else 800
+    val HEIGHT: Int get() = if (wide) 720 else 480
     const val MARGIN_WIDTH = 0
-    const val MARGIN_HEIGHT = 0
+    val MARGIN_HEIGHT: Int get() = if (wide) 240 else 0
     const val DENSITY = 160
     const val DISPLAY_ID = 1          // logical display id, distinct from the main display (0)
     const val DISPLAY_TYPE_CLUSTER = 1

@@ -64,6 +64,9 @@ object CarSettings {
         return true
     }
 
+    /** Wide cluster map stream (full-screen map mode); applies from the next Android Auto connection. */
+    val mapWide: Boolean get() = current.optBoolean("mapWide", true)
+
     private fun message(): String = JSONObject(current.toString()).put("type", "settings").toString()
 
     fun defaults(): JSONObject = JSONObject()
@@ -77,6 +80,8 @@ object CarSettings {
         .put("tankLitres", 70)
         .put("fuelPrice", 2.0)
         .put("fuelReserveKm", 30)
+        .put("mapWide", true)
+        .put("mapAuto", false)
         .put("speedLimit", true)
         .put("speedLimitMargin", 3)
         .put("defaultPage", 0)
@@ -98,6 +103,8 @@ object CarSettings {
             .put("tankLitres", num("tankLitres", 30.0, 120.0).toInt())
             .put("fuelPrice", Math.round(num("fuelPrice", 0.0, 10.0) * 1000) / 1000.0)
             .put("fuelReserveKm", num("fuelReserveKm", 0.0, 200.0).toInt())
+            .put("mapWide", input.optBoolean("mapWide", true))
+            .put("mapAuto", input.optBoolean("mapAuto", false))
             .put("perfPopups", input.optString("perfPopups", "sport").takeIf { it in setOf("sport", "always", "off") } ?: "sport")
         // redline rows [°C, rpm], sorted by temperature
         val rows = (input.optJSONArray("redline") ?: d.getJSONArray("redline"))
@@ -161,6 +168,10 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 <label><span>Fuel price per litre<small>For cost per tank on the FUEL page</small></span><input id="fuelPrice" type="number" step="0.01"></label>
 <label><span>Destination reserve (km)<small>Warn when arriving with less range than this</small></span><input id="fuelReserveKm" type="number"></label>
 </section>
+<section><h2>Map on the cluster</h2>
+<label><span>Full-screen map when a route starts<small>Otherwise hold BC on the steering wheel to switch it on and off</small></span><input id="mapAuto" type="checkbox"></label>
+<label><span>Wide map stream<small>Needed for the full-screen map. Turn off if the map stutters; applies when Android Auto next connects</small></span><input id="mapWide" type="checkbox"></label>
+</section>
 <section><h2>Display</h2>
 <label><span>Default centre page</span><select id="defaultPage"><option value="0">Trip</option><option value="1">Vehicle</option><option value="2">Navigation</option><option value="3">Info</option><option value="4">Fuel</option></select></label>
 </section>
@@ -170,9 +181,9 @@ const $=id=>document.getElementById(id);let s={};
 function rows(){const t=$('redline');t.innerHTML='<tr><td><small>Oil °C</small></td><td><small>Redline rpm</small></td></tr>';
  for(let i=0;i<8;i++){const r=s.redline[i]||['',''];t.insertAdjacentHTML('beforeend',`<tr><td><input type="number" data-r="${'$'}{i}" data-c="0" value="${'$'}{r[0]}"></td><td><input type="number" step="100" data-r="${'$'}{i}" data-c="1" value="${'$'}{r[1]}"></td></tr>`)}}
 function show(){['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin','tankLitres','fuelPrice','fuelReserveKm'].forEach(k=>$(k).value=s[k]);
- ['speedLimit','shiftLights'].forEach(k=>$(k).checked=s[k]);$('sport').value=s.sport;$('perfPopups').value=s.perfPopups;$('defaultPage').value=s.defaultPage;rows()}
+ ['speedLimit','shiftLights','mapAuto','mapWide'].forEach(k=>$(k).checked=s[k]);$('sport').value=s.sport;$('perfPopups').value=s.perfPopups;$('defaultPage').value=s.defaultPage;rows()}
 function collect(){const o={};['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin','defaultPage','tankLitres','fuelPrice','fuelReserveKm'].forEach(k=>o[k]=Number($(k).value));
- ['speedLimit','shiftLights'].forEach(k=>o[k]=$(k).checked);o.sport=$('sport').value;o.perfPopups=$('perfPopups').value;
+ ['speedLimit','shiftLights','mapAuto','mapWide'].forEach(k=>o[k]=$(k).checked);o.sport=$('sport').value;o.perfPopups=$('perfPopups').value;
  const red=[];for(let i=0;i<8;i++){const a=document.querySelector(`[data-r="${'$'}{i}"][data-c="0"]`).value,b=document.querySelector(`[data-r="${'$'}{i}"][data-c="1"]`).value;if(a!==''&&b!=='')red.push([Number(a),Number(b)])}
  o.redline=red;return o}
 function status(t,c){$('status').textContent=t;$('status').style.color=c||''}

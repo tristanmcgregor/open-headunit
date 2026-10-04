@@ -33,6 +33,7 @@ object ClusterLink {
     @Volatile private var latestCall: String? = null
     @Volatile private var latestSettings: String? = null
     @Volatile private var latestLimit: String? = null
+    @Volatile private var latestClusterMap: String? = null
 
     @Synchronized
     fun start() {
@@ -115,6 +116,14 @@ object ClusterLink {
         broadcast(json)
     }
 
+    /** Size of the map the phone draws into the cluster video (the stream minus its margins). */
+    fun publishClusterMap(width: Int, height: Int) {
+        start()
+        val json = JSONObject().put("type", "clustermap").put("width", width).put("height", height).toString()
+        latestClusterMap = json
+        broadcast(json)
+    }
+
     /** Speed limit of the current road (SpeedLimits), also replayed to every cluster that connects. */
     fun publishLimit(json: String) {
         start()
@@ -178,6 +187,7 @@ object ClusterLink {
             latestCall?.let { out.write(textFrame(it)) }
             latestSettings?.let { out.write(textFrame(it)) }
             latestLimit?.let { out.write(textFrame(it)) }
+            latestClusterMap?.let { out.write(textFrame(it)) }
             out.flush()
             clients.add(socket)
             AppLog.i("ClusterLink: cluster connected from ${socket.inetAddress.hostAddress}")
