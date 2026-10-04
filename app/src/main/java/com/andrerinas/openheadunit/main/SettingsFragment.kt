@@ -998,6 +998,16 @@ class SettingsFragment : Fragment() {
             }
         ))
 
+        // JLY E60 build: cluster display settings (CarSettings page)
+        items.add(SettingItem.SettingEntry(
+            stableId = "clusterSettings",
+            nameResId = R.string.cluster_settings,
+            value = getString(R.string.cluster_settings_desc),
+            onClick = { _ ->
+                startActivity(Intent(requireContext(), ClusterSettingsActivity::class.java))
+            }
+        ))
+
         // Permissions checklist (same list the setup wizard shows)
         items.add(SettingItem.SettingEntry(
             stableId = "permissions",
