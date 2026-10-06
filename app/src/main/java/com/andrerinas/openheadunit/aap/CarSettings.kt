@@ -75,6 +75,8 @@ object CarSettings {
 
     fun defaults(): JSONObject = JSONObject()
         .put("speedCorrection", 6.0)
+        .put("speedAuto", true)
+        .put("speedRelearn", 0L)
         .put("sport", "auto")
         .put("shiftLights", true)
         .put("shiftWindow", 2000)
@@ -100,6 +102,8 @@ object CarSettings {
             input.optDouble(key, d.getDouble(key)).let { if (it.isNaN()) d.getDouble(key) else it.coerceIn(lo, hi) }
         val out = JSONObject()
             .put("speedCorrection", num("speedCorrection", -10.0, 15.0))
+            .put("speedAuto", input.optBoolean("speedAuto", true))
+            .put("speedRelearn", input.optLong("speedRelearn", 0L).coerceAtLeast(0L))
             .put("sport", input.optString("sport", "auto").takeIf { it in setOf("auto", "always", "never") } ?: "auto")
             .put("shiftLights", input.optBoolean("shiftLights", true))
             .put("shiftWindow", num("shiftWindow", 500.0, 4000.0).toInt())
@@ -158,7 +162,9 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 <h1>E60 cluster settings</h1>
 <div id="versions" style="color:var(--dim);font-size:14px;margin:-8px 0 14px"></div>
 <section><h2>Speed</h2>
-<label><span>Speed correction %<small>Added to the car's speed (true-speed calibration)</small></span><input id="speedCorrection" type="number" step="0.5"></label>
+<label><span>Learn correction from GPS<small>The cluster compares its speed with GPS on steady stretches and uses what it measures (see the developer page)</small></span><input id="speedAuto" type="checkbox"></label>
+<label><span>Speed correction %<small>Added to the car's speed. Used until GPS has learned one, or always with learning off</small></span><input id="speedCorrection" type="number" step="0.5"></label>
+<label><span>Start learning again<small>After new tyres or wheels; ticked, the next save clears what the cluster has learned</small></span><input id="relearn" type="checkbox"></label>
 <label><span>Show speed limit</span><input id="speedLimit" type="checkbox"></label>
 <label><span>Over-limit margin (km/h)<small>Sign turns red above limit + margin</small></span><input id="speedLimitMargin" type="number"></label>
 <label><span>School zones<small>40 km/h (or as signed) in school hours on Queensland school days</small></span><input id="schoolZones" type="checkbox"></label>
@@ -194,9 +200,9 @@ const $=id=>document.getElementById(id);let s={};
 function rows(){const t=$('redline');t.innerHTML='<tr><td><small>Oil °C</small></td><td><small>Redline rpm</small></td></tr>';
  for(let i=0;i<8;i++){const r=s.redline[i]||['',''];t.insertAdjacentHTML('beforeend',`<tr><td><input type="number" data-r="${'$'}{i}" data-c="0" value="${'$'}{r[0]}"></td><td><input type="number" step="100" data-r="${'$'}{i}" data-c="1" value="${'$'}{r[1]}"></td></tr>`)}}
 function show(){['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin','tankLitres','fuelPrice','fuelReserveKm'].forEach(k=>$(k).value=s[k]);
- ['speedLimit','shiftLights','mapAuto','mapWide','schoolZones','cameraAlerts'].forEach(k=>$(k).checked=s[k]);$('sport').value=s.sport;$('perfPopups').value=s.perfPopups;$('theme').value=s.theme;$('defaultPage').value=s.defaultPage;rows()}
+ ['speedLimit','shiftLights','mapAuto','mapWide','schoolZones','cameraAlerts','speedAuto'].forEach(k=>$(k).checked=s[k]);$('relearn').checked=false;$('sport').value=s.sport;$('perfPopups').value=s.perfPopups;$('theme').value=s.theme;$('defaultPage').value=s.defaultPage;rows()}
 function collect(){const o={};['speedCorrection','speedLimitMargin','shiftWindow','shiftMargin','defaultPage','tankLitres','fuelPrice','fuelReserveKm'].forEach(k=>o[k]=Number($(k).value));
- ['speedLimit','shiftLights','mapAuto','mapWide','schoolZones','cameraAlerts'].forEach(k=>o[k]=$(k).checked);o.sport=$('sport').value;o.perfPopups=$('perfPopups').value;o.theme=$('theme').value;
+ ['speedLimit','shiftLights','mapAuto','mapWide','schoolZones','cameraAlerts','speedAuto'].forEach(k=>o[k]=$(k).checked);o.speedRelearn=$('relearn').checked?Date.now():(s.speedRelearn||0);o.sport=$('sport').value;o.perfPopups=$('perfPopups').value;o.theme=$('theme').value;
  const red=[];for(let i=0;i<8;i++){const a=document.querySelector(`[data-r="${'$'}{i}"][data-c="0"]`).value,b=document.querySelector(`[data-r="${'$'}{i}"][data-c="1"]`).value;if(a!==''&&b!=='')red.push([Number(a),Number(b)])}
  o.redline=red;return o}
 function status(t,c){$('status').textContent=t;$('status').style.color=c||''}
