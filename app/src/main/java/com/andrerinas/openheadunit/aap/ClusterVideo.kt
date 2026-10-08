@@ -1,5 +1,6 @@
 package com.andrerinas.openheadunit.aap
 
+import android.os.SystemClock
 import com.andrerinas.openheadunit.aap.protocol.Channel
 import com.andrerinas.openheadunit.aap.protocol.proto.Media
 import com.andrerinas.openheadunit.decoder.video.VideoFragmentAssembler
@@ -22,6 +23,11 @@ import java.util.concurrent.LinkedBlockingQueue
  * Wire format on TCP [PORT], head unit -> cluster: repeated [u32 big-endian length][Annex-B access
  * unit]. A cluster that connects mid-stream first gets the stored SPS/PPS and every access unit
  * since the last IDR, so its decoder starts from a keyframe without asking the phone for one.
+ *
+ * A cluster that falls behind (outbox full) keeps its connection: the queue is dropped, the phone
+ * is asked for a keyframe, and nothing more is sent until it arrives, so the cluster holds its
+ * last picture briefly and carries on. Only if no keyframe comes within [IDR_WAIT_MS] is the
+ * connection dropped, and the cluster reconnects and starts again from the stored GOP.
  */
 object ClusterVideo {
     const val ENABLED = true
@@ -43,6 +49,15 @@ object ClusterVideo {
 
     private const val MAX_AU_BYTES = 1 shl 20
     private const val MAX_GOP_BYTES = 6 shl 20
+    // ~2 s at 30 fps; a deeper queue only means the cluster's map runs further behind
+    private const val OUTBOX_UNITS = 60
+    private const val IDR_WAIT_MS = 3000L
+    private const val IDR_ASK_EVERY_MS = 1000L
+
+    /** Asks the phone for a keyframe on the cluster channel (set when the channel opens). */
+    @Volatile var keyframeRequester: (() -> Unit)? = null
+    private var skippingSince = 0L           // waiting for a keyframe after the cluster fell behind; 0 = not
+    private var lastAskMs = 0L
 
     private val assembler = VideoFragmentAssembler()
     private val unit = ByteArrayOutputStream(64 * 1024)
@@ -54,7 +69,7 @@ object ClusterVideo {
     private var codecConfig: ByteArray? = null
 
     private val io = Executors.newSingleThreadExecutor()
-    private val outbox = LinkedBlockingQueue<ByteArray>(120)
+    private val outbox = LinkedBlockingQueue<ByteArray>(OUTBOX_UNITS)
     @Volatile private var client: Socket? = null
     @Volatile private var started = false
 
@@ -115,6 +130,7 @@ object ClusterVideo {
         gop.clear()
         gopBytes = 0
         codecConfig = null
+        skippingSince = 0L
     }
 
     private fun emit(au: ByteArray) {
@@ -124,10 +140,35 @@ object ClusterVideo {
             5 in types -> { gop.clear(); gopBytes = 0; gop.add(au); gopBytes += au.size }
             gopBytes + au.size <= MAX_GOP_BYTES -> { gop.add(au); gopBytes += au.size }
         }
-        if (client != null && !outbox.offer(au)) {
-            AppLog.w("ClusterVideo: cluster is behind, dropping its connection to resync")
-            dropClient()
+        if (client == null) { skippingSince = 0L; return }
+        val now = SystemClock.elapsedRealtime()
+        if (skippingSince != 0L) {
+            if (5 in types) {
+                AppLog.i("ClusterVideo: keyframe after ${now - skippingSince} ms, cluster resumes")
+                skippingSince = 0L
+                outbox.clear()
+                codecConfig?.let { if (au !== it) outbox.offer(it) }
+                outbox.offer(au)
+            } else if (now - skippingSince > IDR_WAIT_MS) {
+                AppLog.w("ClusterVideo: no keyframe after falling behind, dropping the cluster to resync")
+                skippingSince = 0L
+                dropClient()
+            } else if (now - lastAskMs >= IDR_ASK_EVERY_MS) {
+                askKeyframe(now)
+            }
+            return
         }
+        if (!outbox.offer(au)) {
+            AppLog.w("ClusterVideo: cluster is behind, skipping to the next keyframe")
+            outbox.clear()
+            skippingSince = now
+            askKeyframe(now)
+        }
+    }
+
+    private fun askKeyframe(now: Long) {
+        lastAskMs = now
+        try { keyframeRequester?.invoke() } catch (e: Exception) { AppLog.w("ClusterVideo: keyframe request failed (${e.message})") }
     }
 
     private fun startServer() {

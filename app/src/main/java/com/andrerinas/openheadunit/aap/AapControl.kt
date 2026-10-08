@@ -129,6 +129,8 @@ internal class AapControlMedia(
         }
         if (channel == Channel.ID_CLU) {
             ClusterVideo.reset()
+            // an unsolicited "projected" focus makes the phone send a fresh keyframe
+            ClusterVideo.keyframeRequester = { aapTransport.send(ClusterVideo.focusNotification()) }
             aapTransport.send(ClusterVideo.focusNotification())
         }
 
