@@ -19,6 +19,7 @@ import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.Calendar
+import java.util.TimeZone
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -51,6 +52,9 @@ object SpeedLimits : LocationListener {
     private const val CAMERA_LEAD_S = 25.0        // ... or this many seconds out at the current speed
     private const val CAMERA_MAX_M = 800.0
     private const val CAMERA_REPEAT_MS = 180_000L // the same camera is not announced again for this long
+    // school hours are Queensland time (no daylight saving), whatever zone the head unit is set to
+    private val QLD: TimeZone = TimeZone.getTimeZone("Australia/Brisbane")
+    private const val MIN_PLAUSIBLE_MS = 1_735_689_600_000L   // 2025-01-01: older fix times are bogus
 
     private lateinit var context: Context
     private val thread = HandlerThread("SpeedLimits").apply { start() }
@@ -189,7 +193,9 @@ object SpeedLimits : LocationListener {
             var school = false
             if (d.schedIdxAt >= 0 && CarSettings.schoolZones) {
                 val ix = d.buf.get(d.schedIdxAt + seg).toInt() and 0xff
-                if (ix > 0 && ix <= d.schedules.size && applies(d, d.schedules[ix - 1])) {
+                val inForce = ix > 0 && ix <= d.schedules.size && applies(d, d.schedules[ix - 1], location)
+                if (ix > 0) logSchedule(ix, inForce, location)
+                if (inForce) {
                     kph = d.schedules[ix - 1].kph
                     // other timed limits (e.g. night-time wildlife zones) apply without the label
                     school = d.schedules[ix - 1].shOff
@@ -212,9 +218,14 @@ object SpeedLimits : LocationListener {
             .put("school", code >= 1000).toString())
     }
 
-    /** Whether a school-hours limit is in force right now (head unit clock, local time). */
-    private fun applies(d: Data, s: Schedule): Boolean {
-        val cal = Calendar.getInstance()
+    /**
+     * Whether a school-hours limit is in force at the fix's time, in Queensland time. The GPS
+     * fix carries satellite time, so neither the head unit's clock nor its time-zone setting
+     * (these units often ship on UTC or China time) can put the school hours in the wrong place.
+     */
+    private fun applies(d: Data, s: Schedule, location: Location): Boolean {
+        val cal = Calendar.getInstance(QLD)
+        cal.timeInMillis = fixTime(location)
         val ymd = cal.get(Calendar.YEAR) * 10000 + (cal.get(Calendar.MONTH) + 1) * 100 + cal.get(Calendar.DAY_OF_MONTH)
         val dow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7           // Monday = 0
         if (s.days and (1 shl dow) == 0) return false
@@ -224,6 +235,22 @@ object SpeedLimits : LocationListener {
         // beyond the known terms, assume a school day: better a 40 sign too many than one missing
         if (s.shOff && ymd <= d.termsUntil && d.terms.none { ymd in it[0]..it[1] }) return false
         return true
+    }
+
+    /** The fix's satellite time, or the head unit clock if the fix has none believable. */
+    private fun fixTime(location: Location): Long =
+        location.time.takeIf { it > MIN_PLAUSIBLE_MS } ?: System.currentTimeMillis()
+
+    // logged when entering or leaving a timed-limit segment, or when it starts/stops applying
+    private var loggedSchedule = 0
+    private fun logSchedule(ix: Int, inForce: Boolean, location: Location) {
+        val key = ix * 2 + if (inForce) 1 else 0
+        if (key == loggedSchedule) return
+        loggedSchedule = key
+        val t = java.text.SimpleDateFormat("EEE yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply { timeZone = QLD }
+            .format(java.util.Date(fixTime(location)))
+        AppLog.i("SpeedLimits: timed limit $ix ${if (inForce) "in force" else "not in force"} at $t Queensland time " +
+            "(head unit zone ${TimeZone.getDefault().id})")
     }
 
     /** Best-matching segment number, or -1. */
