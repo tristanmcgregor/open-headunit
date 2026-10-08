@@ -35,6 +35,14 @@ internal class AapControlMedia(
 
     override fun execute(message: AapMessage): Int {
 
+        if (message.channel == Channel.ID_CLU &&
+            message.type == Media.MsgType.MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST_VALUE) {
+            // The cluster display has no native UI to hand back to; it is always projected.
+            AppLog.i("RX: Cluster video focus request -> projected")
+            aapTransport.send(ClusterVideo.focusNotification())
+            return 0
+        }
+
         when (message.type) {
             Media.MsgType.MEDIA_MESSAGE_SETUP_VALUE -> {
                 val setupRequest = message.parse(Media.MediaSetupRequest.newBuilder()).build()
@@ -118,6 +126,12 @@ internal class AapControlMedia(
         if (channel == Channel.ID_VID) {
             aapTransport.gainVideoFocus()
         }
+        if (channel == Channel.ID_CLU) {
+            ClusterVideo.reset()
+            // an unsolicited "projected" focus makes the phone send a fresh keyframe
+            ClusterVideo.keyframeRequester = { aapTransport.send(ClusterVideo.focusNotification()) }
+            aapTransport.send(ClusterVideo.focusNotification())
+        }
 
         // Pushing AudioFocusNotification
         if (Channel.isAudio(channel)) {
@@ -134,6 +148,7 @@ internal class AapControlMedia(
     }
 
     private fun maxUnackedFor(channel: Int): Int {
+        if (channel == Channel.ID_CLU) return 8
         if (channel == Channel.ID_VID) {
             val softwareHevc =
                 aapTransport.settings.videoCodec == VideoDecoder.CodecType.H265.settingsValue &&
@@ -482,9 +497,9 @@ internal class AapControlGateway(
 
         when (message.channel) {
             Channel.ID_CTR -> return serviceControl.execute(message)
-            Channel.ID_INP -> return touchControl.execute(message)
+            Channel.ID_INP, Channel.ID_CLU_INP -> return touchControl.execute(message)
             Channel.ID_SEN -> return sensorControl.execute(message)
-            Channel.ID_VID, Channel.ID_AUD, Channel.ID_AU1, Channel.ID_AU2, Channel.ID_MIC -> return mediaControl.execute(message)
+            Channel.ID_VID, Channel.ID_CLU, Channel.ID_AUD, Channel.ID_AU1, Channel.ID_AU2, Channel.ID_MIC -> return mediaControl.execute(message)
         }
         return 0
     }

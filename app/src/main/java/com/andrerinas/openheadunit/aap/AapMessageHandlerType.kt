@@ -18,7 +18,26 @@ internal class AapMessageHandlerType(
         onAaPlaybackStatus: ((MediaPlayback.MediaPlaybackStatus) -> Unit)? = null) : AapMessageHandler {
 
     private val aapControl: AapControl = AapControlGateway(transport, recorder, aapAudio, settings, context)
-    private val mediaPlayback = AapMediaPlayback(onAaMediaMetadata, onAaPlaybackStatus)
+    // JLY E60 build: now-playing also goes to the cluster (ClusterLink "media").
+    private var clusterTrack = MediaPlayback.MediaMetaData.getDefaultInstance()
+    private var clusterPlaying = false
+    private var clusterPosition = 0
+    private val mediaPlayback = AapMediaPlayback(
+        { meta ->
+            onAaMediaMetadata?.invoke(meta)
+            val newArt = !meta.albumArt.equals(clusterTrack.albumArt)
+            clusterTrack = meta
+            ClusterLink.publishMedia(meta.song, meta.artist, meta.album, clusterPlaying, meta.durationSeconds, clusterPosition)
+            if (newArt) ClusterLink.publishArt(if (meta.hasAlbumArt()) meta.albumArt.toByteArray() else null)
+        },
+        { status ->
+            onAaPlaybackStatus?.invoke(status)
+            clusterPlaying = status.state == MediaPlayback.MediaPlaybackStatus.State.PLAYING
+            clusterPosition = status.playbackSeconds
+            ClusterLink.publishMedia(clusterTrack.song, clusterTrack.artist, clusterTrack.album, clusterPlaying,
+                clusterTrack.durationSeconds, clusterPosition)
+        }
+    )
     private val aapNavigation = AapNavigation(context, settings)
 
     private val dispatchMonitor = TransportDispatchMonitor()
@@ -64,6 +83,15 @@ internal class AapMessageHandlerType(
             }
         }
 
+        // 1b. Instrument cluster video: forwarded to the JLY cluster, never decoded here. Acked at
+        // once like any media message, since nothing on this side can fall behind.
+        if (message.channel == Channel.ID_CLU && ClusterVideo.isPayload(message)) {
+            // never let the cluster path take the phone session down with it
+            try { ClusterVideo.onMessage(message) } catch (e: Exception) { AppLog.e("ClusterVideo: frame handling failed", e) }
+            if (msgType == 0 || msgType == 1) transport.sendMediaAck(Channel.ID_CLU)
+            return
+        }
+
         // 2. Try processing as Audio stream (Speech, System, Media)
         if (message.isAudio) {
             if (aapAudio.process(message)) {
@@ -80,6 +108,24 @@ internal class AapMessageHandlerType(
         // 3. Media Playback Status (separate channel)
         if (message.channel == Channel.ID_MPB && msgType > 31) {
             mediaPlayback.process(message)
+            return
+        }
+
+        // 3b. Phone status (JLY E60 build): the active call goes to the cluster (ClusterLink "call").
+        if (message.channel == Channel.ID_PHONE && msgType == PHONE_STATUS_MSG) {
+            try {
+                val status = message.parse(
+                    com.andrerinas.openheadunit.aap.protocol.proto.Control.Service.PhoneStatusService.newBuilder()
+                ).build()
+                val call = status.callsList.firstOrNull()
+                if (call == null) {
+                    ClusterLink.publishCall(false, 0, "", "", 0)
+                } else {
+                    ClusterLink.publishCall(true, call.state.number, call.callerId, call.callerNumber, call.callDurationSeconds)
+                }
+            } catch (e: Exception) {
+                AppLog.w("PhoneStatus: could not parse (${e.message})")
+            }
             return
         }
 
@@ -103,5 +149,10 @@ internal class AapMessageHandlerType(
         } else {
             AppLog.e("Unknown msg_type: %d, flags: %d, channel: %d", msgType, flags, message.channel)
         }
+    }
+
+    private companion object {
+        /** AA phone-status channel: PHONE_STATUS message id. */
+        const val PHONE_STATUS_MSG = 0x8001
     }
 }

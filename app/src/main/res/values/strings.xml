@@ -1315,4 +1315,7 @@
     <string name="oem_app_action_failed">Execution failed: %s</string>
     <string name="copy_to_clipboard">Copy</string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
+    <!-- JLY E60 build -->
+    <string name="cluster_settings">Cluster settings</string>
+    <string name="cluster_settings_desc">E60 cluster display: speed correction, sport layout, shift lights, redline, speed limits</string>
 </resources>

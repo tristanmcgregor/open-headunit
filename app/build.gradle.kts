@@ -98,8 +98,16 @@ android {
         applicationId = "com.andrerinas.headunitrevived"
         minSdk = 16
         targetSdk = 36
-        versionCode = 116
-        versionName = "3.5.0-beta3"
+        // JLY E60 build: -Pe60Release=N (tools/release.py) numbers an over-the-air release; its
+        // versionCode must keep rising for Android to accept the update. Uploads must be signed
+        // by the release key; only its public half (updater/signing_pub.pem) is built in.
+        val e60Release = (project.findProperty("e60Release") as String?)?.toIntOrNull() ?: 0
+        val e60PubKey = rootProject.file("../../updater/signing_pub.pem").takeIf { it.isFile }?.readLines()
+            ?.filter { !it.startsWith("-----") }?.joinToString("") ?: ""
+        buildConfigField("int", "E60_RELEASE", "$e60Release")
+        buildConfigField("String", "E60_UPDATE_PUBKEY", "\"$e60PubKey\"")
+        versionCode = if (e60Release > 0) 200000 + e60Release else 116
+        versionName = if (e60Release > 0) "3.5.0-beta3-e60.$e60Release" else "3.5.0-beta3"
         setProperty("archivesBaseName", "${applicationId}_${versionName}")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true

@@ -261,6 +261,7 @@ object AppLog {
 
     private fun log(priority: Int, msg: String) {
         LOGGER.println(priority, TAG, msg)
+        UsbLogMirror.add(priority, TAG, msg)
     }
 
     private fun isLoggable(priority: Int): Boolean = priority >= LOG_LEVEL
@@ -275,7 +276,9 @@ object AppLog {
      */
     private fun loge(message: String, tr: Throwable?) {
         val trace = if (tr != null) Log.getStackTraceString(tr) else ""
-        LOGGER.println(Log.ERROR, TAG, if (trace.isEmpty()) message else "$message\n$trace")
+        val full = if (trace.isEmpty()) message else "$message\n$trace"
+        LOGGER.println(Log.ERROR, TAG, full)
+        UsbLogMirror.add(Log.ERROR, TAG, full)
     }
 
     private fun closeAppLogFileLogger() {
