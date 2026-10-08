@@ -142,10 +142,14 @@ object ClusterLink {
         broadcast(json)
     }
 
-    /** Size of the map the phone draws into the cluster video (the stream minus its margins). */
-    fun publishClusterMap(width: Int, height: Int) {
+    /**
+     * Size of the map the phone draws into the cluster video (the stream minus its margins), and
+     * of the whole video. The map sits centred in the video: the phone splits the margins evenly.
+     */
+    fun publishClusterMap(width: Int, height: Int, videoWidth: Int, videoHeight: Int) {
         start()
-        val json = JSONObject().put("type", "clustermap").put("width", width).put("height", height).toString()
+        val json = JSONObject().put("type", "clustermap").put("width", width).put("height", height)
+            .put("videoWidth", videoWidth).put("videoHeight", videoHeight).toString()
         latestClusterMap = json
         broadcast(json)
     }

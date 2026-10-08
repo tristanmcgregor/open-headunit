@@ -24,7 +24,7 @@ object CarSettings {
     fun init(application: Application) {
         file = File(application.filesDir, "carsettings.json")
         current = try {
-            if (file.isFile) sanitize(JSONObject(file.readText())) else defaults()
+            if (file.isFile) sanitize(migrate(JSONObject(file.readText()))) else defaults()
         } catch (e: Exception) {
             AppLog.w("CarSettings: stored settings unreadable, using defaults (${e.message})")
             defaults()
@@ -73,8 +73,19 @@ object CarSettings {
 
     private fun message(): String = JSONObject(current.toString()).put("type", "settings").toString()
 
+    /**
+     * Settings version 2: the default speed correction went from +6 % to -6 % (the car's speed
+     * reads high, not low). A stored +6 from version 1 is that old default, so it moves over.
+     */
+    private fun migrate(stored: JSONObject): JSONObject {
+        if (stored.optInt("version", 1) < 2 && stored.optDouble("speedCorrection", 6.0) == 6.0)
+            stored.put("speedCorrection", -6.0)
+        return stored
+    }
+
     fun defaults(): JSONObject = JSONObject()
-        .put("speedCorrection", 6.0)
+        .put("version", 2)
+        .put("speedCorrection", -6.0)
         .put("speedAuto", true)
         .put("speedRelearn", 0L)
         .put("sport", "auto")
@@ -101,6 +112,7 @@ object CarSettings {
         fun num(key: String, lo: Double, hi: Double): Double =
             input.optDouble(key, d.getDouble(key)).let { if (it.isNaN()) d.getDouble(key) else it.coerceIn(lo, hi) }
         val out = JSONObject()
+            .put("version", 2)
             .put("speedCorrection", num("speedCorrection", -10.0, 15.0))
             .put("speedAuto", input.optBoolean("speedAuto", true))
             .put("speedRelearn", input.optLong("speedRelearn", 0L).coerceAtLeast(0L))
@@ -163,7 +175,7 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:var(--acce
 <div id="versions" style="color:var(--dim);font-size:14px;margin:-8px 0 14px"></div>
 <section><h2>Speed</h2>
 <label><span>Learn correction from GPS<small>The cluster compares its speed with GPS on steady stretches and uses what it measures (see the developer page)</small></span><input id="speedAuto" type="checkbox"></label>
-<label><span>Speed correction %<small>Added to the car's speed. Used until GPS has learned one, or always with learning off</small></span><input id="speedCorrection" type="number" step="0.5"></label>
+<label><span>Speed correction %<small>Added to the car's speed (negative lowers it). Used until GPS has learned one, or always with learning off</small></span><input id="speedCorrection" type="number" step="0.5"></label>
 <label><span>Start learning again<small>After new tyres or wheels; ticked, the next save clears what the cluster has learned</small></span><input id="relearn" type="checkbox"></label>
 <label><span>Show speed limit</span><input id="speedLimit" type="checkbox"></label>
 <label><span>Over-limit margin (km/h)<small>Sign turns red above limit + margin</small></span><input id="speedLimitMargin" type="number"></label>

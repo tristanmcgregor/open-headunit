@@ -182,8 +182,8 @@ class ServiceDiscoveryResponse(private val context: Context)
                             .build())
                         .build()
                 }.build())
-                // the cluster crops to the drawn area: the phone draws top-left, margin at the bottom
-                com.andrerinas.openheadunit.aap.ClusterLink.publishClusterMap(cv.WIDTH - cv.MARGIN_WIDTH, cv.HEIGHT - cv.MARGIN_HEIGHT)
+                // the cluster crops to the drawn area, which the phone centres between equal margins
+                com.andrerinas.openheadunit.aap.ClusterLink.publishClusterMap(cv.WIDTH - cv.MARGIN_WIDTH, cv.HEIGHT - cv.MARGIN_HEIGHT, cv.WIDTH, cv.HEIGHT)
                 AppLog.i("[ServiceDiscovery] Cluster display announced on channel ${Channel.ID_CLU} (input ${Channel.ID_CLU_INP}, display id ${cv.DISPLAY_ID}): ${cv.WIDTH}x${cv.HEIGHT}, margins ${cv.MARGIN_WIDTH}x${cv.MARGIN_HEIGHT}")
             }
 
