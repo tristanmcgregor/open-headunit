@@ -17,6 +17,7 @@ import android.widget.Toast
 import com.andrerinas.openheadunit.BuildConfig
 import com.andrerinas.openheadunit.main.MainActivity
 import com.andrerinas.openheadunit.utils.AppLog
+import com.andrerinas.openheadunit.utils.ToastUtils
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
@@ -241,7 +242,7 @@ object CarUpdate {
         val release = BuildConfig.E60_RELEASE
         if (release <= 0 || readInt("announced.txt") == release) return
         File(dir, "announced.txt").writeText("$release\n")
-        Toast.makeText(activity, "Open Headunit: E60 release $release installed", Toast.LENGTH_LONG).show()
+        ToastUtils.showToast(activity, "Open Headunit: E60 release $release installed", Toast.LENGTH_LONG, force = true)
     }
 
     // ---- APK install ----
@@ -253,7 +254,7 @@ object CarUpdate {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
             // Android needs "install unknown apps" allowed for this app once
-            Toast.makeText(activity, "Allow Open Headunit to install updates, then come back", Toast.LENGTH_LONG).show()
+            ToastUtils.showToast(activity, "Allow Open Headunit to install updates, then come back", Toast.LENGTH_LONG, force = true)
             try {
                 activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:${activity.packageName}")))
